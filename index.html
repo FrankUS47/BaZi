@@ -313,7 +313,17 @@
             color: var(--primary-color);
             width: 25%;
         }
-    </style>
+    
+    .mini { border-collapse: collapse; margin: 6px 0; font-size: 14px; }
+    .mini td, .mini th { border: 1px solid #ccc; padding: 4px 8px; text-align: center; }
+    .zgrid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); grid-template-rows: repeat(4, minmax(120px, auto)); min-width: 520px; border: 1px solid #a0a; }
+    .zc { border: 1px solid #c8c; background: #fbeefc; padding: 4px; display: flex; flex-direction: column; justify-content: space-between; font-size: 13px; }
+    .zc.zhl { background: #ffe0ef; outline: 2px solid #e33; outline-offset: -2px; }
+    .zm { color: #c00; font-weight: bold; } .zs { color: #226; } .zc i { color: #d60; font-style: normal; font-size: 11px; }
+    .zg { color: #b60; font-size: 12px; margin-top: 4px; }
+    .zf { display: flex; justify-content: space-between; font-size: 12px; } .zf b { color: #fff; background: #a3a; padding: 0 4px; }
+    .zcen { grid-area: 2 / 2 / 4 / 4; border: 1px solid #c8c; background: #fff; padding: 10px; font-size: 14px; line-height: 1.8; }
+</style>
 </head>
 <body>
 
@@ -675,6 +685,9 @@
         }
 
         let bazi = calcBaziFourPillars(birthDate, birthHour);
+        let baziExtra = '', ziweiHtml = '';
+        try { baziExtra = buildBaziExtra(birthDate, birthHour, gender, bazi); ziweiHtml = buildZiwei(birthDate, birthHour, gender, topic); }
+        catch (e) { baziExtra = ziweiHtml = '<p>命盤排盤失敗，請確認出生日期與時辰。</p>'; }
         let ziweiPalaceMap = {
             'career': '官祿宮 (三方四正：對宮夫妻，三合命宮、財帛宮)',
             'wealth': '財帛宮 (三方四正：對宮福德，三合命宮、官祿宮)',
@@ -691,8 +704,18 @@
                     <li><b>性別與出生曆法</b>：${gender}命，國曆 ${birthDate} ${birthHour}時。</li>
                     <li><b>八字四柱</b>：年柱【<b>${bazi.yearPillar}</b>】、月柱【<b>${bazi.monthPillar}</b>】、日柱【<b>${bazi.dayPillar}</b>】、時柱【<b>${bazi.hourPillar}</b>】。</li>
                     <li><b>八字日主屬性</b>：天干為【<b>${bazi.dayMaster} (${bazi.dayElement}五行)</b>】。</li>
-                    <li><b>紫微斗數重點宮位</b>(本程式未實際排盤，僅提示宮位)：主要觀察【<b>${ziweiPalaceMap[topic]}</b>】之星曜氣勢與四化引動。</li>
+                    <li><b>紫微斗數重點宮位</b>：主要觀察【<b>${ziweiPalaceMap[topic]}</b>】之星曜氣勢與四化引動。</li>
                 </ul>
+            </div>
+
+            <div class="analysis-card">
+                <h3>一之二、八字十神與大運</h3>
+                ${baziExtra}
+            </div>
+
+            <div class="analysis-card">
+                <h3>一之三、紫微斗數命盤 (三合派全書安星，粉色為本次問事宮位)</h3>
+                <div style="overflow-x:auto">${ziweiHtml}</div>
             </div>
 
             <div class="analysis-card">
@@ -756,6 +779,107 @@
         document.getElementById('zhiTitle').innerText = '之卦：待起卦';
         document.getElementById('analysisContent').innerHTML = '請輸入個人資料並完成 6 次起卦。完成後系統將自動生成詳細剖析報告。';
     }
+    // ======== 十神、大運、紫微排盤(三合派全書安星) ========
+    const STEM_EL = [0,0,1,1,2,2,3,3,4,4];            // 木火土金水
+    const HIDDEN = '癸己甲乙戊丙丁己庚辛戊壬';           // 各地支本氣
+    function tenGod(dm, st) {
+        const a = heavenlyStems.indexOf(dm), b = heavenlyStems.indexOf(st), same = a % 2 === b % 2;
+        const d = (STEM_EL[b] - STEM_EL[a] + 5) % 5;
+        return [same ? '比肩' : '劫財', same ? '食神' : '傷官', same ? '偏財' : '正財', same ? '七殺' : '正官', same ? '偏印' : '正印'][d];
+    }
+    function findLon(target, jd0) {
+        let lo = jd0 - 40, hi = jd0 + 40;
+        for (let i = 0; i < 50; i++) {
+            const mid = (lo + hi) / 2, diff = ((sunLongitude(mid) - target + 540) % 360) - 180;
+            if (diff < 0) lo = mid; else hi = mid;
+        }
+        return lo;
+    }
+    function buildBaziExtra(dateStr, hourBranch, gender, b) {
+        const [y0, m, d0] = dateStr.split('-').map(Number);
+        const late = hourBranch === '晚子', hIdx = earthlyBranches.indexOf(late ? '子' : hourBranch);
+        const jd = jdn(y0, m, d0) - 0.5 + ((late ? 23.5 : 2 * hIdx) - 8) / 24, lon = sunLongitude(jd);
+        const mi = Math.floor((((lon - 315) % 360) + 360) % 360 / 30), prevLon = (315 + 30 * mi) % 360;
+        const ys = heavenlyStems.indexOf(b.yearPillar[0]);
+        const forward = (ys % 2 === 0) === (gender === '男');
+        const days = forward ? findLon((prevLon + 30) % 360, jd) - jd : jd - findLon(prevLon, jd);
+        const age = days / 3, dm = b.dayMaster;
+        let k = 0; while (!(k % 10 === heavenlyStems.indexOf(b.monthPillar[0]) && k % 12 === earthlyBranches.indexOf(b.monthPillar[1]))) k++;
+        const god = (p, hid) => tenGod(dm, hid ? HIDDEN[earthlyBranches.indexOf(p[1])] : p[0]);
+        const rows = [['年柱', b.yearPillar], ['月柱', b.monthPillar], ['日柱', b.dayPillar], ['時柱', b.hourPillar]]
+            .map(([n, p], i) => `<tr><td>${n}</td><td>${p}</td><td>${i === 2 ? '日主' : god(p)}</td><td>${HIDDEN[earthlyBranches.indexOf(p[1])]} ${god(p, true)}</td></tr>`).join('');
+        let luck = '';
+        for (let i = 1; i <= 8; i++) {
+            const kk = ((forward ? k + i : k - i) % 60 + 60) % 60, p = heavenlyStems[kk % 10] + earthlyBranches[kk % 12];
+            luck += `<td>${p}<br><small>${tenGod(dm, p[0])}</small><br><small>${(age + 10 * (i - 1)).toFixed(1)}歲起<br>${Math.floor(y0 + age + 10 * (i - 1))}年</small></td>`;
+        }
+        return `<table class="mini"><tr><th>柱</th><th>干支</th><th>天干十神</th><th>地支本氣十神</th></tr>${rows}</table>
+            <p><b>大運</b>（${ys % 2 === 0 ? '陽' : '陰'}年${gender}命，${forward ? '順' : '逆'}行；約 ${age.toFixed(1)} 歲起運，三天折一年）</p>
+            <div style="overflow-x:auto"><table class="mini"><tr>${luck}</tr></table></div>`;
+    }
+    function lunarOf(y, m, d) {
+        const p = new Intl.DateTimeFormat('en-u-ca-chinese', { year: 'numeric', month: 'numeric', day: 'numeric', timeZone: 'UTC' })
+            .formatToParts(new Date(Date.UTC(y, m - 1, d, 12)));
+        const g = t => p.find(x => x.type === t).value, mo = g('month');
+        return { y: parseInt(g('relatedYear')), m: parseInt(mo), leap: /bis/.test(mo), d: parseInt(g('day')) };
+    }
+    // 星曜亮度：甲級星(十四主星)＋文昌文曲祿存擎羊陀羅火星鈴星；來源：紫微人生「甲級星廟旺利陷表」
+    const BRI_NAME = { 紫:'紫微', 機:'天機', 陽:'太陽', 武:'武曲', 同:'天同', 廉:'廉貞', 府:'天府', 陰:'太陰', 貪:'貪狼', 巨:'巨門', 相:'天相', 梁:'天梁', 殺:'七殺', 破:'破軍', 祿:'祿存', 昌:'文昌', 曲:'文曲', 羊:'擎羊', 陀:'陀羅', 火:'火星', 鈴:'鈴星' };
+    const BRI_ROWS = ['機府陰相梁破祿|武同貪巨殺|昌曲||紫廉||陽羊火鈴','紫武府陰貪相殺昌曲羊陀|梁破|火鈴|廉||陽同巨|機','廉府巨相梁殺祿火鈴|紫陽陰|機武破|同|貪曲||昌陀','陽巨梁祿|紫機殺曲|府|武貪昌火鈴|同廉||陰相破羊','武府貪梁殺羊陀|陽破|紫相昌曲|機廉|同||陰巨火鈴','同昌曲祿|紫陽巨|府相火鈴||機武殺破||廉陰貪梁陀','紫機相梁破祿火鈴|陽武府貪巨殺|||廉|陰|同昌曲羊','紫武府貪殺羊陀|梁破曲|陽相|廉昌火鈴||同陰巨|機','廉巨相殺祿|紫同|機陽武府破昌曲|陰|貪||梁陀火鈴','巨昌曲祿|紫機府陰殺|梁火鈴|武貪|陽同廉||相破羊','武府貪梁殺羊陀火鈴|陰破|紫相|機廉|同|陽|巨昌曲','同陰祿|紫巨曲|府相|昌火鈴|機武殺破||陽廉貪梁陀'];
+    function brightOf(name, b) {
+        const lv = ['廟','旺','得','利','平','不','陷'], cols = BRI_ROWS[b].split('|');
+        for (let i = 0; i < 7; i++) for (const ch of (cols[i] || '')) if (BRI_NAME[ch] === name) return lv[i];
+        return '';
+    }
+    const Z_PAL = ['命宮','兄弟','夫妻','子女','財帛','疾厄','遷移','交友','官祿','田宅','福德','父母'];
+    const Z_HUA = { 甲:'廉貞,破軍,武曲,太陽', 乙:'天機,天梁,紫微,太陰', 丙:'天同,天機,文昌,廉貞', 丁:'太陰,天同,天機,巨門', 戊:'貪狼,太陰,右弼,天機',
+        己:'武曲,貪狼,天梁,文曲', 庚:'太陽,武曲,太陰,天同', 辛:'巨門,太陽,文曲,文昌', 壬:'天梁,紫微,左輔,武曲', 癸:'破軍,巨門,太陰,貪狼' };
+    function buildZiwei(dateStr, hourBranch, gender, topic) {
+        let [y0, m0, d0] = dateStr.split('-').map(Number);
+        const late = hourBranch === '晚子', h = earthlyBranches.indexOf(late ? '子' : hourBranch);
+        if (late) { const t = new Date(Date.UTC(y0, m0 - 1, d0 + 1)); y0 = t.getUTCFullYear(); m0 = t.getUTCMonth() + 1; d0 = t.getUTCDate(); }
+        const L = lunarOf(y0, m0, d0);
+        let lm = L.m; if (L.leap && L.d > 15) lm = lm % 12 + 1;           // 閏月：十五日後算下月
+        const ys = ((L.y - 4) % 10 + 10) % 10, yb = ((L.y - 4) % 12 + 12) % 12, M = n => ((n % 12) + 12) % 12;
+        const ming = M(2 + lm - 1 - h), shen = M(2 + lm - 1 + h);
+        const gan = b => (ys % 5 * 2 + 2 + M(b - 2)) % 10;                   // 五虎遁定宮干
+        const gv = Math.floor(gan(ming) / 2) + 1, zv = [1,1,2,2,3,3,1,1,2,2,3,3][ming];
+        let s5 = gv + zv; if (s5 > 5) s5 -= 5;
+        const ju = [0, 3, 4, 2, 6, 5][s5], juName = ['', '木三局', '金四局', '水二局', '火六局', '土五局'][s5];
+        let x = 0; while ((L.d + x) % ju) x++;
+        const zi = M(2 + (L.d + x) / ju - 1 + (x % 2 ? -x : x)), fu = M(4 - zi);
+        const star = Array.from({ length: 12 }, () => []);
+        [['紫微',0],['天機',-1],['太陽',-3],['武曲',-4],['天同',-5],['廉貞',-8]].forEach(([n, o]) => star[M(zi + o)].push([n, 1]));
+        [['天府',0],['太陰',1],['貪狼',2],['巨門',3],['天相',4],['天梁',5],['七殺',6],['破軍',10]].forEach(([n, o]) => star[M(fu + o)].push([n, 1]));
+        const put = (n, p) => star[M(p)].push([n, 0]);
+        put('左輔', 4 + lm - 1); put('右弼', 10 - (lm - 1)); put('文昌', 10 - h); put('文曲', 4 + h);
+        const qy = { 0:[1,7],1:[0,8],2:[11,9],3:[11,9],4:[1,7],5:[0,8],6:[1,7],7:[6,2],8:[3,5],9:[3,5] }[ys];
+        put('天魁', qy[0]); put('天鉞', qy[1]);
+        const lc = [2,3,5,6,5,6,8,9,11,0][ys]; put('祿存', lc); put('擎羊', lc + 1); put('陀羅', lc - 1);
+        const grp = [[8,0,4],[11,3,7],[2,6,10],[5,9,1]].findIndex(a => a.includes(yb));
+        put('火星', [2,9,1,3][grp] + h); put('鈴星', [10,10,3,10][grp] + h);
+        put('地劫', 11 + h); put('地空', 11 - h);
+        const hua = Z_HUA[heavenlyStems[ys]].split(',');
+        star.forEach(a => a.forEach(s => { const i = hua.indexOf(s[0]); if (i > -1) s.push(['祿','權','科','忌'][i]); }));
+        const forward = (ys % 2 === 0) === (gender === '男');
+        const dx = {}; for (let i = 0; i < 12; i++) { const b = M(forward ? ming + i : ming - i); dx[b] = `${ju + 10 * i}-${ju + 10 * i + 9}`; }
+        const CS = ['長生','沐浴','冠帶','臨官','帝旺','衰','病','死','墓','絕','胎','養'];
+        const BS = ['博士','力士','青龍','小耗','將軍','奏書','飛廉','喜神','病符','大耗','伏兵','官府'];
+        const cs0 = { '水二局': 8, '土五局': 8, '木三局': 11, '金四局': 5, '火六局': 2 }[juName], csN = [], bsN = [];
+        for (let i = 0; i < 12; i++) { csN[M(forward ? cs0 + i : cs0 - i)] = CS[i]; bsN[M(forward ? lc + i : lc - i)] = BS[i]; }
+        const key = { career:'官祿', wealth:'財帛', love:'夫妻', health:'疾厄', general:'命宮' }[topic];
+        const order = [5,6,7,8,4,null,null,9,3,null,null,10,2,1,0,11];
+        const cell = (b, i) => {
+            const pal = Z_PAL[M(ming - b)];
+            const st = star[b].map(([n, main, hh]) => `<span class="${main ? 'zm' : 'zs'}">${n}${brightOf(n, b) ? '.' + brightOf(n, b) : ''}${hh ? `<i>化${hh}</i>` : ''}</span>`).join(' ');
+            return `<div class="zc${pal.includes(key) ? ' zhl' : ''}" style="grid-area:${Math.floor(i / 4) + 1}/${i % 4 + 1}"><div>${st}</div><div class="zg">${csN[b]}　${bsN[b]}</div><div class="zf"><span>${heavenlyStems[gan(b)]}${earthlyBranches[b]} ${dx[b]}</span><b>${pal}${b === shen ? '(身)' : ''}</b></div></div>`;
+        };
+        const mz = '貪狼巨門祿存文曲廉貞武曲破軍武曲廉貞文曲祿存巨門'.match(/../g)[ming];
+        const sz = ['火星','天相','天梁','天同','文昌','天機','火星','天相','天梁','天同','文昌','天機'][yb];
+        const centre = `<div class="zcen"><b>農曆 ${L.y}年${L.leap ? '閏' : ''}${L.m}月${L.d}日${earthlyBranches[h]}時</b><br>${heavenlyStems[ys]}${earthlyBranches[yb]}年 ${gender}命　${juName}<br>命宮：${earthlyBranches[ming]}　身宮：${earthlyBranches[shen]}<br>命主：${mz}　身主：${sz}<br>四化：${['祿','權','科','忌'].map((t, i) => hua[i] + '化' + t).join('、')}${late ? '<br>晚子時以次日計' : ''}</div>`;
+        return `<div class="zgrid">${order.map((b, i) => b === null ? '' : cell(b, i)).join('')}${centre}</div>`;
+    }
+
     // 民國年換算西元年：獨立小工具，只顯示結果，不讀寫其他欄位或排盤資料
     function rocToAD() {
         const v = parseInt(document.getElementById('rocYear').value, 10);
